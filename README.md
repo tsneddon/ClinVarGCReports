@@ -22,3 +22,17 @@ This script then uses the file above to output an Excel file for ClinVar variant
   * \#3. Lab_Conflict: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from the clinical lab with same name.
   * \#4. EP_Conflict: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from an Expert Panel or Practice Guideline.
   * \#5. Outlier: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from at least one 1-star or above (or clinical testing) submitter.
+
+
+## How to run these scripts
+All scripts are run as 'python3 *filename.py*
+All scripts use FTP to take the most recent ClinVar FTP files as input and to output the files with the date of the FTP submission_summary.txt.gz file appended:
+
+  * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/submission_summary.txt.gz
+  * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/variation_allele.txt.gz
+  * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz
+  * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/organization_summary.txt
+  * ftp.ncbi.nih.gov/pub//pub/GTR/data/gtr_ftp.xml.gz
+  * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/variation_archive_xxxxxxxx.xml.gz
+
+These ClinVar files are then removed when finished.
