@@ -843,7 +843,6 @@ def print_variants(worksheet, row, varID, headerSubs, varSubs, p2fileVarIDs, tab
             labs.extend(scvHash[varID][scv]['LabName'])
             clinSig.append(scvHash[varID][scv]['ClinSig'])
             scvs.append(scv)
-            #dle.append(print_date(scvHash[varID][scv]['DateLastEval']))
             dle.append(scvHash[varID][scv]['DateLastEval'])
             conditions.append(scvHash[varID][scv]['Condition'])
 
