@@ -236,12 +236,12 @@ def create_a2vHash(gzfile):
                 col = re.split(r'\t', line) #split on tabs
                 if not col[0] == '': #ignore empty lines
                     varID = int(col[0])
-                    type = col[1]
+                    varType = col[1]
                     alleleID = int(col[2])
 
                     #Ignore rows that are not Variant (simple type)
                     #This excludes Haplotype, CompoundHeterozygote, Complex, Phase unknown, Distinct chromosomes
-                    if type == 'Variant':
+                    if varType == 'Variant':
                         a2vHash[alleleID] = varID
 
     input.close()
@@ -262,14 +262,14 @@ def create_HGVSHash(gzfile):
                 col = re.split(r'\t', line) #split on tabs
                 if not col[0] == '': #ignore empty lines
                     alleleID = int(col[0])
-                    type = col[1]
+                    varType = col[1]
                     HGVSname = col[2]
                     geneSym = col[4]
                     clinSig = col[6]
                     phenotype = col[13]
 
                     if alleleID in a2vHash:
-                        HGVSHash[a2vHash[alleleID]] = {'VarType':type, 'HGVSname':HGVSname, 'GeneSym':geneSym, 'ClinSig':clinSig, 'Phenotype':phenotype}
+                        HGVSHash[a2vHash[alleleID]] = {'VarType':varType, 'HGVSname':HGVSname, 'GeneSym':geneSym, 'ClinSig':clinSig, 'Phenotype':phenotype}
 
     input.close()
     os.remove(gzfile)
@@ -443,11 +443,11 @@ def create_tab4(workbook, worksheet0):
                 lab = scvHash[varID][SCV]['LabName']
                 sig = scvHash[varID][SCV]['ClinSig']
 
-                for SCV in scvHash[varID]:
-                    if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['Submitter'] in lab and scvHash[varID][SCV]['ClinSig'] == sig:
-                        headerSubs.append(scvHash[varID][SCV]['Submitter'])
-                        if varID not in p2fileVarIDs:
-                            p2fileVarIDs.append(varID)
+        for SCV in scvHash[varID]:
+            if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['Submitter'] in lab and scvHash[varID][SCV]['ClinSig'] == sig:
+                headerSubs.append(scvHash[varID][SCV]['Submitter'])
+                if varID not in p2fileVarIDs:
+                    p2fileVarIDs.append(varID)
 
     headerSubs = sorted(set(headerSubs))
 
@@ -552,7 +552,6 @@ def outlier(varID, headerSubs, p2fileVarIDs, tab):
     subSignificance, submitters, p, lp, plp, vus, lb, b, lbb, vlbb, total, other = get_pathCounts(varID, tab)
 
     conflict = ''
-
 
     if ('P' in subSignificance and vlbb != 0) or ('VUS' in subSignificance and (plp != 0 or lbb != 0)) or ('B' in subSignificance and plp+vus != 0):
         if varID not in p2fileVarIDs.keys():
