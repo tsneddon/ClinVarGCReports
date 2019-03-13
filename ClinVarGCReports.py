@@ -940,7 +940,6 @@ def main():
     create_scvHash(inputFile3)
     add_labdata(inputFile4)
 
-    tabFile = ExcelDir + '/GCSummary_' + date + '.txt'
     excelFile = 'GenomeConnectReport_' + date + '.xlsx'
 
     create_a2vHash(inputFile5)
