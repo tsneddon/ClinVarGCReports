@@ -4,7 +4,7 @@ Python scripts to generate ClinGen GenomeConnect reports from ClinVar FTP files.
 ## About this project
 The scripts in this project use ClinVar FTP files to generate the following files in the subdirectory ClinVarGCReports/:
 
-**ClinVarGCReports.py** - this script outputs an Excel file for ClinVar variants that have a GenomeConnect submission. The Excel contains a README with summary stats and 5 structured tabs as detailed below:
+**ClinVarGCReports.py** - this script outputs an Excel file for ClinVar variants that have a GenomeConnect submission. The Excel contains a README with summary stats and 6 structured tabs as detailed below:
   
   * \#1. All_subs: All ClinVar variants where there is a GenomeConnect submission.
   * \#2. All_novel: All ClinVar variants where the only submission is from GenomeConnect.
