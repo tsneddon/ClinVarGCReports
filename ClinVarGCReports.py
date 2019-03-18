@@ -9,7 +9,8 @@ import re
 import pprint
 import xlsxwriter
 
-orgDict = {}
+orgDict = {} #scv->orgID
+submitterDict = {} #orgID->submitter
 gcVarIDs = []
 scvHash = {}
 a2vHash = {}
@@ -51,50 +52,25 @@ def make_directory(dir, date):
     return(directory)
 
 
-def create_orgDict1(gzfile):
-    '''This function adds lookup of OrgID to GTR submitter name to orgDict'''
+def create_orgDict(gzfile):
+    '''This function makes a dictionary from the ClinVar production XML'''
 
     with gzip.open(gzfile) as input:
         for event, elem in ET.iterparse(input):
 
-            for root in elem.iter(tag='GTRLabData'):
-                for node0 in root.iter(tag='GTRLab'):
-                    labCode = int(node0.attrib['id'])
-                    for node1 in node0.iter(tag='Organization'):
-                        for node2 in node1.iter(tag='Name'):
-                            labName = node2.text
-                            labName = re.sub('[^0-9a-zA-Z]+', '_', labName)
-                            labName = labName[0:50]
-                            orgDict[labCode] = [labName]
+            if elem.tag == 'ClinVarSet':
+                for ClinAss in elem.iter(tag='ClinVarAssertion'):
+                    for ClinAcc in ClinAss.iter(tag='ClinVarAccession'):
+                        orgID = int(ClinAcc.attrib['OrgID'])
+                        accession = ClinAcc.attrib['Acc']
+
+                        if accession not in orgDict:
+                            orgDict[accession] = orgID
+
+                elem.clear()
 
     input.close()
     os.remove(gzfile)
-    return(orgDict)
-
-
-def create_orgDict2(infile):
-    '''This function adds lookup of OrgID to ClinVar submitter name to orgDict'''
-
-    with open(infile) as input:
-        line = input.readline()
-
-        while line:
-            line = input.readline()
-
-            if not line.startswith('#'): #ignore lines that start with #
-                col = re.split(r'\t', line) #split on tabs
-                if not col[0] == '': #ignore empty lines
-                    labName = col[0]
-                    labName = re.sub('[^0-9a-zA-Z]+', '_', labName)
-                    labName = labName[0:50]
-                    labID = int(col[1])
-                    if labID not in orgDict:
-                        orgDict[labID] = [labName]
-                    else:
-                        orgDict[labID].append(labName)
-
-    input.close()
-    os.remove(infile)
     return(orgDict)
 
 
@@ -129,12 +105,17 @@ def create_scvHash(gzfile):
 
                     submitter = col[9]
                     submitter = re.sub('[^0-9a-zA-Z]+', '_', submitter)
-                    submitter = submitter[0:50]
 
                     SCV = col[10]
+                    accession = col[10].split('.', 1)[0]
+
+                    if accession in orgDict:
+                        orgID = orgDict[accession]
+                    else:
+                        orgID = 'None'
 
                     if (revStat == 'reviewed by expert panel' or revStat == 'practice guideline') and 'PharmGKB' not in submitter: #-- to exclude PharmGKB records
-                        EPHash[varID] = {'ClinSig':clinSig, 'Submitter':submitter, 'DateLastEval':dateLastEval}
+                        EPHash[varID] = {'ClinSig':clinSig, 'Submitter':submitter, 'DateLastEval':dateLastEval, 'OrgID':orgID}
 
                     if submitter == sub and varID not in gcVarIDs:
                         gcVarIDs.append(varID)
@@ -142,7 +123,8 @@ def create_scvHash(gzfile):
                     if varID not in scvHash.keys():
                         scvHash[varID] = {}
 
-                    scvHash[varID][SCV] = {'ClinSig':clinSig, 'DateLastEval':dateLastEval, 'Submitter':submitter, 'ReviewStatus':revStat, 'ColMeth':colMeth, 'Condition':condition}
+                    scvHash[varID][SCV] = {'ClinSig':clinSig, 'DateLastEval':dateLastEval, 'Submitter':submitter, 'ReviewStatus':revStat, 'ColMeth':colMeth, 'Condition':condition, 'OrgID':orgID}
+                    submitterDict[orgID] = submitter
 
     input.close()
     os.remove(gzfile)
@@ -160,7 +142,7 @@ def add_labdata(gzfile):
             orgID = ''
             DLE = ''
             labCode = ''
-            labName = []
+            labName = ''
             clinSig = ''
 
             if elem.tag == 'VariationArchive':
@@ -170,6 +152,7 @@ def add_labdata(gzfile):
                     for ClinAss in elem.iter(tag='ClinicalAssertion'):
                         for ClinAcc in ClinAss.iter(tag='ClinVarAccession'):
                             scv = ClinAcc.attrib['Accession'] + '.' + ClinAcc.attrib['Version']
+                            accession = ClinAcc.attrib['Accession']
                             if scv in scvHash[varID]:
                                 for ObsMeth in ClinAss.iter(tag='ObsMethodAttribute'):
                                     for Attr in ObsMeth.iter(tag='Attribute'):
@@ -184,28 +167,27 @@ def add_labdata(gzfile):
                                                 labCode = int(Attr.attrib['integerValue'])
                                             else:
                                                 labCode = 'None'
+                                                scvHash[varID][scv].update({'NoLabCode':labCode})
 
                                             scvHash[varID][scv].update({'LabCode':labCode})
-                                            
+
                                             if Attr.text != None:
-                                                lab = Attr.text
-                                                lab = re.sub('[^0-9a-zA-Z]+', '_', lab)
-                                                lab = lab[0:50]
-                                                labName.append(lab)
+                                                labName = Attr.text
+                                                labName = re.sub('[^0-9a-zA-Z]+', '_', labName)
+
                                             else:
-                                                try:
-                                                    if orgDict[labCode]:
-                                                        labName.extend(orgDict[labCode])
-                                                except:
-                                                    labName.append('None')
+                                                if labCode != 'None' and labCode in submitterDict:
+                                                    labName = submitterDict[labCode]
+                                                else:
+                                                    labName = 'None'
+
                                             scvHash[varID][scv].update({'LabName':labName})
 
-                                            if labCode == 'None' and labName[0] != 'None':
+                                            if labCode == 'None' and labName != 'None':
                                                 for id in orgDict:
-                                                    for name in labName:
-                                                        if name in orgDict[id]:
-                                                            labCode = int(id)
-                                                            scvHash[varID][scv].update({'LabCode':labCode})
+                                                    if id == accession:
+                                                        labCode = int(orgDict[id])
+                                                        scvHash[varID][scv].update({'LabCode':labCode})
 
                                     for Comment in ObsMeth.iter(tag='Comment'):
                                         if Comment.text != None:
@@ -297,11 +279,13 @@ def create_files(ExcelDir, excelFile, date):
     worksheet0.write(10, 1, '4. Lab_Consensus: ClinVar variants where the GenomeConnect testing lab clinical significance [P] vs [LP] vs [VUS] vs [LB] vs [B] is the same as that from the clinical lab with same name.')
     worksheet0.write(11, 1, '5. EP_Conflict: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from an Expert Panel or Practice Guideline.')
     worksheet0.write(12, 1, '6. Outlier: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from at least one 1-star or above (or clinical testing) submitter.')
+    worksheet0.write(13, 1, '7. SCV_NoOrgID: GenomeConnect SCVs that were submitted to ClinVar without an OrgID for the testing lab.')
+    worksheet0.write(14, 1, '8. Lab_NotSubmitted: GenomeConnect SCVs where the testing lab has NOT also submitted an SCV.')
 
-    worksheet0.write(14, 0, 'Note: Tab classification counts are for unique submissions only i.e. if the same variant is submitted twice as Pathogenic by the same submitter, it will only be counted once')
-    worksheet0.write(15, 0, 'Note: A variant can occur in multiple tabs i.e. if the same variant is submitted twice, once as Pathogenic and once as Benign by the same submitter, the variant could be both an outlier and the consensus')
+    worksheet0.write(16, 0, 'Note: Tab classification counts are for unique submissions only i.e. if the same variant is submitted twice as Pathogenic by the same submitter, it will only be counted once')
+    worksheet0.write(17, 0, 'Note: A variant can occur in multiple tabs i.e. if the same variant is submitted twice, once as Pathogenic and once as Benign by the same submitter, the variant could be both an outlier and the consensus')
 
-    tabList = [create_tab1, create_tab2, create_tab3, create_tab4, create_tab5, create_tab6]
+    tabList = [create_tab1, create_tab2, create_tab3, create_tab4, create_tab5, create_tab6, create_tab7, create_tab8]
     for tab in tabList:
         tab(workbook, worksheet0)
 
@@ -399,19 +383,17 @@ def create_tab3(workbook, worksheet0):
     headerSubs = []
 
     for varID in gcVarIDs:
-
-        lab = []
-        sig = ''
         for SCV in scvHash[varID]:
+            lab = ''
+            sig = ''
             if sub == scvHash[varID][SCV]['Submitter']:
-                lab = scvHash[varID][SCV]['LabName']
+                lab = scvHash[varID][SCV]['LabCode']
                 sig = scvHash[varID][SCV]['ClinSig']
-
-        for SCV in scvHash[varID]:
-            if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['Submitter'] in lab and scvHash[varID][SCV]['ClinSig'] != sig:
-                headerSubs.append(scvHash[varID][SCV]['Submitter'])
-                if varID not in p2fileVarIDs:
-                    p2fileVarIDs.append(varID)
+                for SCV in scvHash[varID]:
+                    if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['OrgID'] == lab and scvHash[varID][SCV]['ClinSig'] != sig:
+                        headerSubs.append(scvHash[varID][SCV]['Submitter'])
+                        if varID not in p2fileVarIDs:
+                            p2fileVarIDs.append(varID)
 
     headerSubs = sorted(set(headerSubs))
 
@@ -435,19 +417,18 @@ def create_tab4(workbook, worksheet0):
     headerSubs = []
 
     for varID in gcVarIDs:
-
-        lab = []
-        sig = ''
         for SCV in scvHash[varID]:
+            lab = ''
+            sig = ''
             if sub == scvHash[varID][SCV]['Submitter']:
-                lab = scvHash[varID][SCV]['LabName']
+                lab = scvHash[varID][SCV]['LabCode']
                 sig = scvHash[varID][SCV]['ClinSig']
 
-        for SCV in scvHash[varID]:
-            if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['Submitter'] in lab and scvHash[varID][SCV]['ClinSig'] == sig:
-                headerSubs.append(scvHash[varID][SCV]['Submitter'])
-                if varID not in p2fileVarIDs:
-                    p2fileVarIDs.append(varID)
+                for SCV in scvHash[varID]:
+                    if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['OrgID'] == lab and scvHash[varID][SCV]['ClinSig'] == sig:
+                        headerSubs.append(scvHash[varID][SCV]['Submitter'])
+                        if varID not in p2fileVarIDs:
+                            p2fileVarIDs.append(varID)
 
     headerSubs = sorted(set(headerSubs))
 
@@ -504,6 +485,66 @@ def create_tab6(workbook, worksheet0):
     print_stats(worksheet0, 12, 0, row)
 
 
+def create_tab7(workbook, worksheet0):
+    '''This function creates the Tab#7 (SCV_NoOrgID) in the Excel file'''
+
+    worksheet7 = workbook.add_worksheet('7.SCV_NoOrgID')
+
+    tab = 7
+    row = 0
+    p2fileVarIDs = []
+    headerSubs = []
+
+    for varID in gcVarIDs:
+
+        for SCV in scvHash[varID]:
+            if sub == scvHash[varID][SCV]['Submitter'] and 'NoLabCode' in scvHash[varID][SCV] and scvHash[varID][SCV]['NoLabCode'] == 'None':
+                if varID not in p2fileVarIDs:
+                    p2fileVarIDs.append(varID)
+
+    print_header(p2fileVarIDs, headerSubs, worksheet7, tab)
+
+    for varID in p2fileVarIDs:
+        varSubs = get_varSubs(varID)
+        row = print_variants(worksheet7, row, varID, headerSubs, varSubs, p2fileVarIDs, tab)
+
+    print_stats(worksheet0, 13, 0, row)
+
+
+def create_tab8(workbook, worksheet0):
+    '''This function creates the Tab#8 (NotSubmitted) in the Excel file'''
+
+    worksheet8 = workbook.add_worksheet('8.Lab_NotSubmitted')
+
+    tab = 8
+    row = 0
+    p2fileVarIDs = []
+    headerSubs = []
+
+    for varID in gcVarIDs:
+        labs = []
+        include = 'Yes'
+        for SCV in scvHash[varID]:
+            if sub == scvHash[varID][SCV]['Submitter']:
+                labs.append(scvHash[varID][SCV]['LabCode'])
+
+        for SCV in scvHash[varID]:
+            if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['OrgID'] in labs:
+                include = 'No'
+
+        if include == 'Yes':
+            if varID not in p2fileVarIDs:
+                p2fileVarIDs.append(varID)
+
+    print_header(p2fileVarIDs, headerSubs, worksheet8, tab)
+
+    for varID in p2fileVarIDs:
+        varSubs = get_varSubs(varID)
+        row = print_variants(worksheet8, row, varID, headerSubs, varSubs, p2fileVarIDs, tab)
+
+    print_stats(worksheet0, 14, 0, row)
+
+
 def EP_outlier(varID, headerSubs, p2fileVarIDs, tab):
     '''This function returns the submitters where the clinical significance is discrepant from an Expert Panel or Practice Guideline'''
 
@@ -552,6 +593,7 @@ def outlier(varID, headerSubs, p2fileVarIDs, tab):
     subSignificance, submitters, p, lp, plp, vus, lb, b, lbb, vlbb, total, other = get_pathCounts(varID, tab)
 
     conflict = ''
+
 
     if ('P' in subSignificance and vlbb != 0) or ('VUS' in subSignificance and (plp != 0 or lbb != 0)) or ('B' in subSignificance and plp+vus != 0):
         if varID not in p2fileVarIDs.keys():
@@ -761,7 +803,7 @@ def print_header(gcVarIDs, headerSubs, worksheet, tab):
         worksheet.write(0, k, sub + '_condition(s)')
         k+=1
 
-        if tab != 5:
+        if tab != 5 and tab != 8:
             for head in headerSubs:
                 if head != sub:
                     worksheet.write(0, k, head)
@@ -778,7 +820,7 @@ def print_header(gcVarIDs, headerSubs, worksheet, tab):
             k+=1
             worksheet.write(0, k, 'Total_Misc')
             k+=1
-        if tab != 2 and tab != 5:
+        if tab != 2 and tab != 5 and tab != 7 and tab != 8:
             worksheet.write(0, k, 'Submitting_labs')
     else:
         worksheet.write(0, 0, 'No variants found')
@@ -810,12 +852,6 @@ def print_variants(worksheet, row, varID, headerSubs, varSubs, p2fileVarIDs, tab
         worksheet.write(row, k, HGVSHash[varID]['ClinSig'])
     k+=1
 
-    if tab != 5:
-       if varID in EPHash.keys():
-           worksheet.write(row, k, EPHash[varID]['Submitter'] + ' (' + EPHash[varID]['ClinSig'] + ')')
-       else:
-           worksheet.write(row, k, 'N/A')
-       k+=1
     if tab == 5:
         worksheet.write(row, k, EPHash[varID]['Submitter'])
         k+=1
@@ -828,6 +864,13 @@ def print_variants(worksheet, row, varID, headerSubs, varSubs, p2fileVarIDs, tab
         k+=1
         worksheet.write(row, k, p2fileVarIDs[varID]['EPConflict'])
         k+=1
+    else:
+       if varID in EPHash.keys():
+           worksheet.write(row, k, EPHash[varID]['Submitter'] + ' (' + EPHash[varID]['ClinSig'] + ')')
+       else:
+           worksheet.write(row, k, 'N/A')
+       k+=1
+
     if tab == 6:
         worksheet.write(row, k, p2fileVarIDs[varID]['Conflict'])
         k+=1
@@ -840,9 +883,10 @@ def print_variants(worksheet, row, varID, headerSubs, varSubs, p2fileVarIDs, tab
 
     for scv in scvHash[varID]:
         if scvHash[varID][scv]['Submitter'] == sub:
-            labs.extend(scvHash[varID][scv]['LabName'])
+            labs.append(scvHash[varID][scv]['LabName'])
             clinSig.append(scvHash[varID][scv]['ClinSig'])
             scvs.append(scv)
+            #dle.append(print_date(scvHash[varID][scv]['DateLastEval']))
             dle.append(scvHash[varID][scv]['DateLastEval'])
             conditions.append(scvHash[varID][scv]['Condition'])
 
@@ -917,33 +961,30 @@ def print_stats(worksheet0, line, column, row):
 
 def main():
 
-    inputFile1 = 'gtr_ftp.xml.gz' #path: /pub/GTR/data/
-    inputFile2 = 'organization_summary.txt' #path: /pub/clinvar/tab_delimited/
+    inputFile1 = 'ClinVarFullRelease_00-latest.xml.gz' #path: 'pub/clinvar/xml/'
+    inputFile2 = 'variation_archive_20190225.xml.gz' #path: /pub/clinvar/xml/clinvar_variation/beta/
     inputFile3 = 'submission_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
-    inputFile4 = 'variation_archive_20190225.xml.gz' #path: /pub/clinvar/xml/clinvar_variation/beta/
-    inputFile5 = 'variation_allele.txt.gz' #path: /pub/clinvar/tab_delimited/
-    inputFile6 = 'variant_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
+    inputFile4 = 'variation_allele.txt.gz' #path: /pub/clinvar/tab_delimited/
+    inputFile5 = 'variant_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
 
     dir = 'ClinVarGCReports'
 
-    get_file(inputFile1, '/pub/GTR/data/')
-    get_file(inputFile2, '/pub/clinvar/tab_delimited/')
+    get_file(inputFile1, 'pub/clinvar/xml/')
+    get_file(inputFile2, '/pub/clinvar/xml/clinvar_variation/beta/')
     date = get_file(inputFile3, '/pub/clinvar/tab_delimited/')
-    get_file(inputFile4, '/pub/clinvar/xml/clinvar_variation/beta/')
+    get_file(inputFile4, '/pub/clinvar/tab_delimited/')
     get_file(inputFile5, '/pub/clinvar/tab_delimited/')
-    get_file(inputFile6, '/pub/clinvar/tab_delimited/')
 
     ExcelDir = make_directory(dir, date)
 
-    create_orgDict1(inputFile1)
-    create_orgDict2(inputFile2)
+    create_orgDict(inputFile1)
     create_scvHash(inputFile3)
-    add_labdata(inputFile4)
+    add_labdata(inputFile2)
 
     excelFile = 'GenomeConnectReport_' + date + '.xlsx'
 
-    create_a2vHash(inputFile5)
-    create_HGVSHash(inputFile6)
+    create_a2vHash(inputFile4)
+    create_HGVSHash(inputFile5)
 
     create_files(ExcelDir, excelFile, date)
 
