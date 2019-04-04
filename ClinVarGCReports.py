@@ -58,11 +58,11 @@ def create_orgDict(gzfile):
     with gzip.open(gzfile) as input:
         for event, elem in ET.iterparse(input):
 
-            if elem.tag == 'ClinVarSet':
-                for ClinAss in elem.iter(tag='ClinVarAssertion'):
+            if elem.tag == 'VariationArchive':
+                for ClinAss in elem.iter(tag='ClinicalAssertion'):
                     for ClinAcc in ClinAss.iter(tag='ClinVarAccession'):
                         orgID = int(ClinAcc.attrib['OrgID'])
-                        accession = ClinAcc.attrib['Acc']
+                        accession = ClinAcc.attrib['Accession']
 
                         if accession not in orgDict:
                             orgDict[accession] = orgID
@@ -70,7 +70,6 @@ def create_orgDict(gzfile):
                 elem.clear()
 
     input.close()
-    os.remove(gzfile)
     return(orgDict)
 
 
@@ -273,14 +272,14 @@ def create_files(ExcelDir, excelFile, date):
     worksheet0.write(4, 0, "This Excel file is the output of a script that takes the most recent submission_summary.txt file from the ClinVar FTP site and outputs all the variants for " + sub)
     worksheet0.write(5, 0, 'Each tab is the result of a different set of parameters as outlined below:')
     worksheet0.write(6, 0, '#Variants:')
-    worksheet0.write(7, 1, '1. All_subs: All ClinVar variants where there is a GenomeConnect submission.')
-    worksheet0.write(8, 1, '2. All_novel: All ClinVar variants where the only submission is from GenomeConnect.')
-    worksheet0.write(9, 1, '3. Lab_Conflict: ClinVar variants where the GenomeConnect testing lab clinical significance [P] vs [LP] vs [VUS] vs [LB] vs [B] differs from the clinical lab with same name.')
-    worksheet0.write(10, 1, '4. Lab_Consensus: ClinVar variants where the GenomeConnect testing lab clinical significance [P] vs [LP] vs [VUS] vs [LB] vs [B] is the same as that from the clinical lab with same name.')
-    worksheet0.write(11, 1, '5. EP_Conflict: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from an Expert Panel or Practice Guideline.')
+    worksheet0.write(7, 1, '1. AllSubs: All ClinVar variants where there is a GenomeConnect submission.')
+    worksheet0.write(8, 1, '2. AllNovel: All ClinVar variants where the only submission is from GenomeConnect.')
+    worksheet0.write(9, 1, '3. LabConflicts: ClinVar variants where the GenomeConnect testing lab clinical significance [P] vs [LP] vs [VUS] vs [LB] vs [B] differs from the clinical lab with same name.')
+    worksheet0.write(10, 1, '4. LabConsensus: ClinVar variants where the GenomeConnect testing lab clinical significance [P] vs [LP] vs [VUS] vs [LB] vs [B] is the same as that from the clinical lab with same name.')
+    worksheet0.write(11, 1, '5. EPConflict: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from an Expert Panel or Practice Guideline.')
     worksheet0.write(12, 1, '6. Outlier: ClinVar variants where the GenomeConnect testing lab clinical significance [P/LP] vs [VUS] vs [LB/B] differs from at least one 1-star or above (or clinical testing) submitter.')
-    worksheet0.write(13, 1, '7. SCV_NoOrgID: GenomeConnect SCVs that were submitted to ClinVar without an OrgID for the testing lab.')
-    worksheet0.write(14, 1, '8. Lab_NotSubmitted: GenomeConnect SCVs where the testing lab has NOT also submitted an SCV.')
+    worksheet0.write(13, 1, '7. LabNotSubmitted: GenomeConnect SCVs where the testing lab has an OrgID but has NOT independently submitted an SCV on the variant.')
+    worksheet0.write(14, 1, '8. LabNoOrgID: GenomeConnect SCVs where the testing lab was submitted without an OrgID.')
 
     worksheet0.write(16, 0, 'Note: Tab classification counts are for unique submissions only i.e. if the same variant is submitted twice as Pathogenic by the same submitter, it will only be counted once')
     worksheet0.write(17, 0, 'Note: A variant can occur in multiple tabs i.e. if the same variant is submitted twice, once as Pathogenic and once as Benign by the same submitter, the variant could be both an outlier and the consensus')
@@ -350,9 +349,9 @@ def create_tab1(workbook, worksheet0):
 
 
 def create_tab2(workbook, worksheet0):
-    '''This function creates the Tab#2 (All_novel_GC) in the Excel file'''
+    '''This function creates the Tab#2 (All_novel) in the Excel file'''
 
-    worksheet2 = workbook.add_worksheet('2.AllNovelGC')
+    worksheet2 = workbook.add_worksheet('2.AllNovel')
 
     tab = 2
     row = 0
@@ -442,9 +441,9 @@ def create_tab4(workbook, worksheet0):
 
 
 def create_tab5(workbook, worksheet0):
-    '''This function creates the Tab#5 (VCEP _Conflict) in the Excel file'''
+    '''This function creates the Tab#5 (EP_Conflict) in the Excel file'''
 
-    worksheet5 = workbook.add_worksheet('5.VCEPConflict')
+    worksheet5 = workbook.add_worksheet('5.EPConflict')
 
     tab = 5
     row = 0
@@ -466,7 +465,7 @@ def create_tab5(workbook, worksheet0):
 def create_tab6(workbook, worksheet0):
     '''This function creates the Tab#6 (Outlier) in the Excel file'''
 
-    worksheet6 = workbook.add_worksheet('6.Outlier_P.VUS.B')
+    worksheet6 = workbook.add_worksheet('6.Outlier')
 
     tab = 6
     row = 0
@@ -486,37 +485,11 @@ def create_tab6(workbook, worksheet0):
 
 
 def create_tab7(workbook, worksheet0):
-    '''This function creates the Tab#7 (SCV_NoOrgID) in the Excel file'''
+    '''This function creates the Tab#7 (Lab_NotSubmitted) in the Excel file'''
 
-    worksheet7 = workbook.add_worksheet('7.SCV_NoOrgID')
+    worksheet7 = workbook.add_worksheet('7.LabNotSubmitted')
 
     tab = 7
-    row = 0
-    p2fileVarIDs = []
-    headerSubs = []
-
-    for varID in gcVarIDs:
-
-        for SCV in scvHash[varID]:
-            if sub == scvHash[varID][SCV]['Submitter'] and 'NoLabCode' in scvHash[varID][SCV] and scvHash[varID][SCV]['NoLabCode'] == 'None':
-                if varID not in p2fileVarIDs:
-                    p2fileVarIDs.append(varID)
-
-    print_header(p2fileVarIDs, headerSubs, worksheet7, tab)
-
-    for varID in p2fileVarIDs:
-        varSubs = get_varSubs(varID)
-        row = print_variants(worksheet7, row, varID, headerSubs, varSubs, p2fileVarIDs, tab)
-
-    print_stats(worksheet0, 13, 0, row)
-
-
-def create_tab8(workbook, worksheet0):
-    '''This function creates the Tab#8 (NotSubmitted) in the Excel file'''
-
-    worksheet8 = workbook.add_worksheet('8.Lab_NotSubmitted')
-
-    tab = 8
     row = 0
     p2fileVarIDs = []
     headerSubs = []
@@ -529,12 +502,38 @@ def create_tab8(workbook, worksheet0):
                 labs.append(scvHash[varID][SCV]['LabCode'])
 
         for SCV in scvHash[varID]:
-            if sub != scvHash[varID][SCV]['Submitter'] and scvHash[varID][SCV]['OrgID'] in labs:
+            if sub != scvHash[varID][SCV]['Submitter'] and (scvHash[varID][SCV]['OrgID'] in labs or scvHash[varID][SCV]['OrgID'] != 'None'):
                 include = 'No'
 
         if include == 'Yes':
             if varID not in p2fileVarIDs:
                 p2fileVarIDs.append(varID)
+
+    print_header(p2fileVarIDs, headerSubs, worksheet7, tab)
+
+    for varID in p2fileVarIDs:
+        varSubs = get_varSubs(varID)
+        row = print_variants(worksheet7, row, varID, headerSubs, varSubs, p2fileVarIDs, tab)
+
+    print_stats(worksheet0, 13, 0, row)
+
+
+def create_tab8(workbook, worksheet0):
+    '''This function creates the Tab#8 (Lab_NoOrgID) in the Excel file'''
+
+    worksheet8 = workbook.add_worksheet('8.LabNoOrgID')
+
+    tab = 8
+    row = 0
+    p2fileVarIDs = []
+    headerSubs = []
+
+    for varID in gcVarIDs:
+
+        for SCV in scvHash[varID]:
+            if sub == scvHash[varID][SCV]['Submitter'] and 'NoLabCode' in scvHash[varID][SCV] and scvHash[varID][SCV]['NoLabCode'] == 'None':
+                if varID not in p2fileVarIDs:
+                    p2fileVarIDs.append(varID)
 
     print_header(p2fileVarIDs, headerSubs, worksheet8, tab)
 
@@ -803,7 +802,7 @@ def print_header(gcVarIDs, headerSubs, worksheet, tab):
         worksheet.write(0, k, sub + '_condition(s)')
         k+=1
 
-        if tab != 5 and tab != 8:
+        if tab != 5 and tab != 7:
             for head in headerSubs:
                 if head != sub:
                     worksheet.write(0, k, head)
@@ -961,30 +960,28 @@ def print_stats(worksheet0, line, column, row):
 
 def main():
 
-    inputFile1 = 'ClinVarFullRelease_00-latest.xml.gz' #path: 'pub/clinvar/xml/'
-    inputFile2 = 'variation_archive_20190225.xml.gz' #path: /pub/clinvar/xml/clinvar_variation/beta/
-    inputFile3 = 'submission_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
-    inputFile4 = 'variation_allele.txt.gz' #path: /pub/clinvar/tab_delimited/
-    inputFile5 = 'variant_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
+    inputFile1 = 'ClinVarVariationRelease_00-latest.xml.gz' #path: pub/clinvar/xml/clinical_variation/
+    inputFile2 = 'submission_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
+    inputFile3 = 'variation_allele.txt.gz' #path: /pub/clinvar/tab_delimited/
+    inputFile4 = 'variant_summary.txt.gz' #path: /pub/clinvar/tab_delimited/
 
     dir = 'ClinVarGCReports'
 
-    get_file(inputFile1, 'pub/clinvar/xml/')
-    get_file(inputFile2, '/pub/clinvar/xml/clinvar_variation/beta/')
-    date = get_file(inputFile3, '/pub/clinvar/tab_delimited/')
+    get_file(inputFile1, '/pub/clinvar/xml/clinical_variation/')
+    date = get_file(inputFile2, '/pub/clinvar/tab_delimited/')
+    get_file(inputFile3, '/pub/clinvar/tab_delimited/')
     get_file(inputFile4, '/pub/clinvar/tab_delimited/')
-    get_file(inputFile5, '/pub/clinvar/tab_delimited/')
 
     ExcelDir = make_directory(dir, date)
 
     create_orgDict(inputFile1)
-    create_scvHash(inputFile3)
-    add_labdata(inputFile2)
+    create_scvHash(inputFile2)
+    add_labdata(inputFile1)
 
     excelFile = 'GenomeConnectReport_' + date + '.xlsx'
 
-    create_a2vHash(inputFile4)
-    create_HGVSHash(inputFile5)
+    create_a2vHash(inputFile3)
+    create_HGVSHash(inputFile4)
 
     create_files(ExcelDir, excelFile, date)
 
