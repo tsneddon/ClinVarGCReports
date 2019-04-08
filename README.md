@@ -25,6 +25,6 @@ All scripts use FTP to take the most recent ClinVar FTP files as input and to ou
   * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz
   * ftp.ncbi.nih.gov/pub/clinvar/tab_delimited/organization_summary.txt
   * ftp.ncbi.nih.gov/pub//pub/GTR/data/gtr_ftp.xml.gz
-  * ftp.ncbi.nih.gov/pub/clinvar/xml/clinical_variation/ClinVarVariationRelease_00-latest.xml.gz
+  * ftp.ncbi.nih.gov/pub/clinvar/xml/clinvar_variation/ClinVarVariationRelease_00-latest.xml.gz
 
 These ClinVar files are then removed when finished.
